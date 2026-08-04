@@ -1,6 +1,17 @@
 import type { Request, Response } from "@google-cloud/functions-framework";
 import { getTripConfig, setTripConfig, type TripConfig, type ScheduledMessage } from "./tripConfig";
 import { findCity } from "./cities";
+import { verifyLiffIdToken } from "./liffAuth";
+
+/** 這個設定頁只有旅遊管家的擁有者能看/能改,其他加這個 LINE 官方帳號為好友的人一律擋掉。 */
+async function authenticateOwner(req: Request): Promise<boolean> {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) return false;
+
+  const userId = await verifyLiffIdToken(authHeader.slice("Bearer ".length));
+  const ownerUserId = process.env.OWNER_USER_ID;
+  return typeof userId === "string" && typeof ownerUserId === "string" && userId === ownerUserId;
+}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^\d{2}:\d{2}$/;
@@ -44,6 +55,11 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
 }
 
 export async function handleTripConfigApi(req: Request, res: Response): Promise<void> {
+  if (!(await authenticateOwner(req))) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+
   if (req.method === "GET") {
     res.status(200).json({ config: await getTripConfig() });
     return;

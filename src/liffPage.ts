@@ -1,10 +1,11 @@
 import { CITIES } from "./cities";
 
-/** 產生「行程設定」LIFF 頁面。純讀寫 /api/config,沒有帳號驗證——
- * 這個頁面只會透過 LINE 群組裡的連結流出,設定的又只是城市/日期(非個資/金流),
- * 為了降低給非技術使用者的操作門檻,刻意不做 LIFF ID Token 驗證(跟 line-assistant 的做法不同)。 */
-export function renderLiffPage(): string {
+/** 產生「行程設定」LIFF 頁面。用 LIFF ID Token 驗證,只有 OWNER_USER_ID 那個 LINE 帳號能看/能改——
+ * 這個 Rich Menu 連結是這個官方帳號所有好友都看得到的同一個選單,所以一定要擋非擁有者,
+ * 不然任何人加這個 OA 為好友就能看到、甚至改掉整個旅遊行程設定。 */
+export function renderLiffPage(liffId: string): string {
   const citiesJson = JSON.stringify(CITIES);
+  const liffIdJson = JSON.stringify(liffId);
 
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -34,6 +35,9 @@ export function renderLiffPage(): string {
 </head>
 <body>
   <h1>🧳 旅遊行程設定</h1>
+  <div id="authMessage" style="display:none;color:#e05555;font-weight:bold;padding:12px;background:#fff0f0;border-radius:8px;"></div>
+
+  <div id="formContent" style="display:none;">
   <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播行程,並在你設定的時間送上當天城市的天氣。</p>
 
   <label for="startDate">開始日期</label>
@@ -64,10 +68,24 @@ export function renderLiffPage(): string {
 
   <button id="save">儲存</button>
   <div id="status"></div>
+  </div>
 
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
   const CITIES = ${citiesJson};
+  const LIFF_ID = ${liffIdJson};
   const COUNTRIES = [...new Set(CITIES.map((c) => c.country))];
+  let idToken = null;
+
+  function authHeaders() {
+    return idToken ? { Authorization: "Bearer " + idToken } : {};
+  }
+
+  function showAuthError(message) {
+    document.getElementById("authMessage").textContent = message;
+    document.getElementById("authMessage").style.display = "block";
+    document.getElementById("formContent").style.display = "none";
+  }
 
   const startDateEl = document.getElementById("startDate");
   const endDateEl = document.getElementById("endDate");
@@ -219,8 +237,13 @@ export function renderLiffPage(): string {
   });
 
   async function loadConfig() {
+    const res = await fetch("api/config", { headers: authHeaders() });
+    if (res.status === 403 || res.status === 401) {
+      showAuthError("🚫 你沒有權限使用這個設定頁面");
+      return;
+    }
+
     try {
-      const res = await fetch("api/config");
       const data = await res.json();
       if (data.config) {
         startDateEl.value = data.config.startDate;
@@ -232,6 +255,7 @@ export function renderLiffPage(): string {
     } catch (err) {
       // 沒有既有設定就當作全新開始
     }
+    document.getElementById("formContent").style.display = "block";
     renderDayRows();
     renderMessageList();
   }
@@ -257,7 +281,7 @@ export function renderLiffPage(): string {
     try {
       const res = await fetch("api/config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
         body: JSON.stringify({
           startDate: startDateEl.value,
           endDate: endDateEl.value,
@@ -273,7 +297,29 @@ export function renderLiffPage(): string {
     }
   });
 
-  loadConfig();
+  async function initAuthAndLoad() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+    } catch (err) {
+      showAuthError("❌ LIFF 初始化失敗,請確認是從 LINE 裡開啟這個連結");
+      return;
+    }
+
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return; // 會導去登入,登入完成後 LINE 會重新載入這個頁面
+    }
+
+    idToken = liff.getIDToken();
+    if (!idToken) {
+      showAuthError("❌ 無法取得身份驗證,請確認 LIFF App 有開啟 openid scope");
+      return;
+    }
+
+    await loadConfig();
+  }
+
+  initAuthAndLoad();
 </script>
 </body>
 </html>`;

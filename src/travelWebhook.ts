@@ -7,7 +7,8 @@ import { handleTripConfigApi } from "./tripConfigApi";
 // 「行程設定」LIFF 網頁(GET /liff),以及該網頁呼叫的 API(/api/config)。
 functions.http("travelWebhook", async (req, res) => {
   if (req.path === "/liff") {
-    res.status(200).set("Content-Type", "text/html; charset=utf-8").send(renderLiffPage());
+    const liffId = process.env.LIFF_ID ?? "";
+    res.status(200).set("Content-Type", "text/html; charset=utf-8").send(renderLiffPage(liffId));
     return;
   }
 
