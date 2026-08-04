@@ -7,11 +7,14 @@ const DOC_ID = "current";
 
 const firestore = new Firestore();
 
+const DEFAULT_WEATHER_TIME = "07:00";
+
 export interface TripConfig {
   country: string;
   city: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
+  weatherTime?: string; // HH:mm,Asia/Tokyo,不設定時預設 07:00
 }
 
 export async function getTripConfig(): Promise<TripConfig | null> {
@@ -28,4 +31,10 @@ export async function setTripConfig(config: TripConfig): Promise<void> {
 export function isWithinTrip(config: TripConfig | null, dateKey: string): boolean {
   if (!config) return false;
   return dateKey >= config.startDate && dateKey <= config.endDate;
+}
+
+/** 判斷現在(timeOfDay,格式 HH:mm)是否已經到了該推播天氣的時間點。
+ * 用「>=」而非精確比對,搭配每 15 分鐘一次的排程觸發,不會因為觸發時間跟設定時間沒對齊而永遠不觸發。 */
+export function isPastWeatherTime(config: TripConfig, timeOfDay: string): boolean {
+  return timeOfDay >= (config.weatherTime ?? DEFAULT_WEATHER_TIME);
 }

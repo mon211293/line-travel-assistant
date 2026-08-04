@@ -3,3 +3,4 @@
 import "./dailyItinerary";
 import "./itineraryReminder";
 import "./travelWebhook";
+import "./weatherPush";

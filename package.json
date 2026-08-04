@@ -11,9 +11,11 @@
     "start:daily": "npm run build && functions-framework --target=dailyItinerary --source=dist/index.js",
     "start:reminder": "npm run build && functions-framework --target=itineraryReminder --source=dist/index.js",
     "start:webhook": "npm run build && functions-framework --target=travelWebhook --source=dist/index.js",
+    "start:weather": "npm run build && functions-framework --target=weatherPush --source=dist/index.js",
     "deploy:daily": "gcloud functions deploy dailyItinerary --gen2 --runtime=nodejs20 --region=asia-east1 --source=. --entry-point=dailyItinerary --trigger-http --no-allow-unauthenticated",
     "deploy:reminder": "gcloud functions deploy itineraryReminder --gen2 --runtime=nodejs20 --region=asia-east1 --source=. --entry-point=itineraryReminder --trigger-http --no-allow-unauthenticated",
-    "deploy:webhook": "gcloud functions deploy travelWebhook --gen2 --runtime=nodejs20 --region=asia-east1 --source=. --entry-point=travelWebhook --trigger-http --allow-unauthenticated --set-env-vars=GCP_PROJECT_ID=bernie-219fb,LIFF_ID=REPLACE_WITH_LIFF_ID"
+    "deploy:webhook": "gcloud functions deploy travelWebhook --gen2 --runtime=nodejs20 --region=asia-east1 --source=. --entry-point=travelWebhook --trigger-http --allow-unauthenticated --set-env-vars=GCP_PROJECT_ID=bernie-219fb,LIFF_ID=REPLACE_WITH_LIFF_ID",
+    "deploy:weather": "gcloud functions deploy weatherPush --gen2 --runtime=nodejs20 --region=asia-east1 --source=. --entry-point=weatherPush --trigger-http --no-allow-unauthenticated"
   },
   "engines": {
     "node": ">=20"

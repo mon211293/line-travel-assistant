@@ -37,6 +37,9 @@ export function renderLiffPage(): string {
   <label for="endDate">結束日期</label>
   <input type="date" id="endDate" />
 
+  <label for="weatherTime">天氣推播時間(日本時間)</label>
+  <input type="time" id="weatherTime" />
+
   <button id="save">儲存</button>
   <div id="status"></div>
 
@@ -47,7 +50,9 @@ export function renderLiffPage(): string {
   const cityEl = document.getElementById("city");
   const startDateEl = document.getElementById("startDate");
   const endDateEl = document.getElementById("endDate");
+  const weatherTimeEl = document.getElementById("weatherTime");
   const statusEl = document.getElementById("status");
+  weatherTimeEl.value = "07:00";
 
   const countries = [...new Set(CITIES.map((c) => c.country))];
   for (const country of countries) {
@@ -80,6 +85,7 @@ export function renderLiffPage(): string {
         renderCities(data.config.country, data.config.city);
         startDateEl.value = data.config.startDate;
         endDateEl.value = data.config.endDate;
+        weatherTimeEl.value = data.config.weatherTime || "07:00";
       } else {
         renderCities(countryEl.value);
       }
@@ -108,6 +114,7 @@ export function renderLiffPage(): string {
           city: cityEl.value,
           startDate: startDateEl.value,
           endDate: endDateEl.value,
+          weatherTime: weatherTimeEl.value || "07:00",
         }),
       });
       if (!res.ok) throw new Error("儲存失敗");

@@ -21,3 +21,9 @@ jobs:
         run: |
           curl -sf -X POST "https://itineraryreminder-tl6b6jk2mq-de.a.run.app/" \
             -H "x-trigger-secret: ${{ secrets.TRIGGER_SECRET }}"
+
+      - name: Trigger weatherPush
+        if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sf -X POST "https://weatherpush-tl6b6jk2mq-de.a.run.app/" \
+            -H "x-trigger-secret: ${{ secrets.TRIGGER_SECRET }}"

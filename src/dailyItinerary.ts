@@ -4,8 +4,6 @@ import { getTodayEvents, type CalendarEvent } from "./calendar";
 import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
 import { getTripConfig, isWithinTrip } from "./tripConfig";
-import { findCity } from "./cities";
-import { getTodayWeather, formatWeatherText } from "./weather";
 
 const TOKYO_TIME_ZONE = "Asia/Tokyo";
 
@@ -62,16 +60,6 @@ export async function dailyItinerary(config: AppConfig): Promise<void> {
 
   const dateLabel = formatDateLabel(now);
   await pushText(config, buildTextSummary(dateLabel, events));
-
-  const city = findCity(tripConfig!.country, tripConfig!.city);
-  if (city) {
-    try {
-      const weather = await getTodayWeather(city, TOKYO_TIME_ZONE);
-      await pushText(config, formatWeatherText(city, weather));
-    } catch (err) {
-      console.error("查詢天氣失敗,略過天氣推播", err);
-    }
-  }
 }
 
 functions.http("dailyItinerary", async (req, res) => {
