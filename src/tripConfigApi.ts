@@ -1,5 +1,5 @@
 import type { Request, Response } from "@google-cloud/functions-framework";
-import { getTripConfig, setTripConfig, type TripConfig } from "./tripConfig";
+import { getTripConfig, setTripConfig, type TripConfig, type ScheduledMessage } from "./tripConfig";
 import { findCity } from "./cities";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -23,11 +23,23 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
     }
   }
 
+  const scheduledMessagesRaw = Array.isArray(b.scheduledMessages) ? b.scheduledMessages : [];
+  const scheduledMessages: ScheduledMessage[] = [];
+  for (const item of scheduledMessagesRaw as unknown[]) {
+    const m = item as Record<string, unknown>;
+    if (typeof m.id !== "string" || m.id.length === 0) continue;
+    if (typeof m.date !== "string" || !DATE_PATTERN.test(m.date)) continue;
+    if (typeof m.time !== "string" || !TIME_PATTERN.test(m.time)) continue;
+    if (typeof m.text !== "string" || m.text.trim().length === 0) continue;
+    scheduledMessages.push({ id: m.id, date: m.date, time: m.time, text: m.text.trim() });
+  }
+
   return {
     startDate: b.startDate,
     endDate: b.endDate,
     weatherTime: typeof b.weatherTime === "string" ? b.weatherTime : undefined,
     cityByDate,
+    scheduledMessages,
   };
 }
 

@@ -23,6 +23,13 @@ export function renderLiffPage(): string {
   .day-row { margin-top: 12px; padding: 10px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
   .day-row .day-label { font-weight: bold; font-size: 14px; }
   .day-row select { margin-top: 8px; }
+  textarea { width: 100%; box-sizing: border-box; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; font-family: inherit; resize: vertical; }
+  .msg-row { margin-top: 10px; padding: 10px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+  .msg-row .msg-meta { font-size: 13px; color: #666; font-weight: bold; }
+  .msg-row .msg-text { margin-top: 4px; font-size: 14px; white-space: pre-wrap; }
+  .msg-row .msg-delete { width: auto; margin-top: 8px; padding: 6px 12px; background: #e05555; font-size: 13px; }
+  .msg-add-row { margin-top: 16px; padding: 12px; border: 1px dashed #ccc; border-radius: 8px; }
+  .msg-add-row .msg-add-btn { background: #2563a6; }
 </style>
 </head>
 <body>
@@ -41,6 +48,20 @@ export function renderLiffPage(): string {
   <h2>📍 每天到訪城市</h2>
   <div id="dayCities"></div>
 
+  <h2>📨 預約訊息</h2>
+  <p style="font-size:13px;color:#666;margin:4px 0 0;">指定日期+時間發送自訂訊息,每則只發一次。沒有設定就不會多發任何東西。</p>
+  <div id="messageList"></div>
+
+  <div class="msg-add-row">
+    <label for="newMsgDate">日期</label>
+    <input type="date" id="newMsgDate" />
+    <label for="newMsgTime">時間(日本時間)</label>
+    <input type="time" id="newMsgTime" />
+    <label for="newMsgText">訊息內容</label>
+    <textarea id="newMsgText" rows="3" placeholder="例如:記得去藥妝店買防曬"></textarea>
+    <button id="addMessage" class="msg-add-btn" type="button">＋ 新增預約訊息</button>
+  </div>
+
   <button id="save">儲存</button>
   <div id="status"></div>
 
@@ -56,6 +77,49 @@ export function renderLiffPage(): string {
   weatherTimeEl.value = "07:00";
 
   let cityByDate = {}; // dateKey -> { country, city }
+  let scheduledMessages = []; // [{ id, date, time, text }]
+
+  function makeMessageId() {
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "msg-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  }
+
+  function renderMessageList() {
+    const listEl = document.getElementById("messageList");
+    listEl.innerHTML = "";
+
+    if (scheduledMessages.length === 0) {
+      listEl.innerHTML = "<p style='color:#999;font-size:13px;'>目前沒有預約訊息</p>";
+      return;
+    }
+
+    const sorted = [...scheduledMessages].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    for (const msg of sorted) {
+      const row = document.createElement("div");
+      row.className = "msg-row";
+
+      const meta = document.createElement("div");
+      meta.className = "msg-meta";
+      meta.textContent = formatDayLabel(msg.date) + " " + msg.time;
+      row.appendChild(meta);
+
+      const text = document.createElement("div");
+      text.className = "msg-text";
+      text.textContent = msg.text;
+      row.appendChild(text);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "msg-delete";
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "刪除";
+      deleteBtn.addEventListener("click", () => {
+        scheduledMessages = scheduledMessages.filter((m) => m.id !== msg.id);
+        renderMessageList();
+      });
+      row.appendChild(deleteBtn);
+
+      listEl.appendChild(row);
+    }
+  }
 
   // 全部用 UTC 存取 Date 物件,把 dateKey 當成「純日期」(不代表任何真實時刻)來處理,
   // 避免瀏覽器本地時區(例如使用者在日本/台灣是 UTC+8/+9)造成 toISOString() 換算時日期跑掉一天。
@@ -136,6 +200,24 @@ export function renderLiffPage(): string {
   startDateEl.addEventListener("change", renderDayRows);
   endDateEl.addEventListener("change", renderDayRows);
 
+  document.getElementById("addMessage").addEventListener("click", () => {
+    const dateEl = document.getElementById("newMsgDate");
+    const timeEl = document.getElementById("newMsgTime");
+    const textEl = document.getElementById("newMsgText");
+
+    if (!dateEl.value || !timeEl.value || !textEl.value.trim()) {
+      statusEl.textContent = "請填完日期、時間、訊息內容再新增";
+      return;
+    }
+
+    scheduledMessages.push({ id: makeMessageId(), date: dateEl.value, time: timeEl.value, text: textEl.value.trim() });
+    dateEl.value = "";
+    timeEl.value = "";
+    textEl.value = "";
+    statusEl.textContent = "";
+    renderMessageList();
+  });
+
   async function loadConfig() {
     try {
       const res = await fetch("api/config");
@@ -145,11 +227,13 @@ export function renderLiffPage(): string {
         endDateEl.value = data.config.endDate;
         weatherTimeEl.value = data.config.weatherTime || "07:00";
         cityByDate = data.config.cityByDate || {};
+        scheduledMessages = data.config.scheduledMessages || [];
       }
     } catch (err) {
       // 沒有既有設定就當作全新開始
     }
     renderDayRows();
+    renderMessageList();
   }
 
   document.getElementById("save").addEventListener("click", async () => {
@@ -179,6 +263,7 @@ export function renderLiffPage(): string {
           endDate: endDateEl.value,
           weatherTime: weatherTimeEl.value || "07:00",
           cityByDate: newCityByDate,
+          scheduledMessages,
         }),
       });
       if (!res.ok) throw new Error("儲存失敗");
