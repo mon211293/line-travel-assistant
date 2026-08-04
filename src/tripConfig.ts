@@ -9,12 +9,17 @@ const firestore = new Firestore();
 
 const DEFAULT_WEATHER_TIME = "07:00";
 
-export interface TripConfig {
+export interface CityRef {
   country: string;
   city: string;
+}
+
+export interface TripConfig {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   weatherTime?: string; // HH:mm,Asia/Tokyo,不設定時預設 07:00
+  /** 每天到訪的城市,key 是 YYYY-MM-DD。某天沒設定就當天不推播天氣(例如還在移動、還沒決定)。 */
+  cityByDate: Record<string, CityRef>;
 }
 
 export async function getTripConfig(): Promise<TripConfig | null> {

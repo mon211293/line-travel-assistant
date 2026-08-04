@@ -33,7 +33,10 @@ export async function weatherPush(config: AppConfig): Promise<void> {
   if (!isPastWeatherTime(tripConfig, getTokyoTimeOfDay(now))) return;
   if (await hasSentWeatherToday(dateKey)) return;
 
-  const city = findCity(tripConfig.country, tripConfig.city);
+  const cityRef = tripConfig.cityByDate[dateKey];
+  if (!cityRef) return; // 那天沒設定城市,不推播天氣(例如還沒決定行程)
+
+  const city = findCity(cityRef.country, cityRef.city);
   if (!city) return;
 
   const weather = await getTodayWeather(city, TOKYO_TIME_ZONE);
