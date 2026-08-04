@@ -4,8 +4,13 @@ import { getUpcomingEvents, type CalendarEvent } from "./calendar";
 import { hasBeenNotified, markNotified } from "./reminderStore";
 import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
+import { getTripConfig, isWithinTrip } from "./tripConfig";
 
 const REMINDER_WINDOW_MINUTES = Number(process.env.REMINDER_WINDOW_MINUTES ?? 60);
+
+function getTokyoDateKey(day: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(day);
+}
 
 function formatReminderText(event: CalendarEvent): string {
   const time = event.start.toLocaleTimeString("zh-TW", {
@@ -20,6 +25,9 @@ function formatReminderText(event: CalendarEvent): string {
 }
 
 export async function itineraryReminder(config: AppConfig): Promise<void> {
+  const tripConfig = await getTripConfig();
+  if (!isWithinTrip(tripConfig, getTokyoDateKey(new Date()))) return;
+
   const events = await getUpcomingEvents(config, REMINDER_WINDOW_MINUTES);
 
   for (const event of events) {

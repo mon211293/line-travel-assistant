@@ -3,8 +3,15 @@ import { loadConfig, type AppConfig } from "./config";
 import { getTodayEvents, type CalendarEvent } from "./calendar";
 import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
+import { getTripConfig, isWithinTrip } from "./tripConfig";
+import { findCity } from "./cities";
+import { getTodayWeather, formatWeatherText } from "./weather";
 
 const TOKYO_TIME_ZONE = "Asia/Tokyo";
+
+function getTokyoDateKey(day: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TOKYO_TIME_ZONE }).format(day);
+}
 
 function formatDateLabel(date: Date): string {
   return date.toLocaleDateString("zh-TW", {
@@ -34,26 +41,37 @@ function formatEventLine(event: CalendarEvent): string {
 }
 
 function buildTextSummary(dateLabel: string, events: CalendarEvent[]): string {
-  const lines = [`🧳 ${dateLabel}`, ""];
-
-  if (events.length === 0) {
-    lines.push("今日沒有安排行程");
-  } else {
-    lines.push("【今日行程】", "");
-    lines.push(events.map(formatEventLine).join("\n\n"));
-  }
-
-  return lines.join("\n");
+  return [`🧳 ${dateLabel}`, "", "【今日行程】", "", events.map(formatEventLine).join("\n\n")].join("\n");
 }
 
 export async function dailyItinerary(config: AppConfig): Promise<void> {
   const now = new Date();
-  const dateLabel = formatDateLabel(now);
+  const dateKey = getTokyoDateKey(now);
+
+  const tripConfig = await getTripConfig();
+  if (!isWithinTrip(tripConfig, dateKey)) {
+    console.log("今天不在行程日期範圍內,跳過推播");
+    return;
+  }
 
   const events = await getTodayEvents(config, now);
+  if (events.length === 0) {
+    console.log("今天沒有行程,跳過推播(避免打擾群組)");
+    return;
+  }
 
-  const text = buildTextSummary(dateLabel, events);
-  await pushText(config, text);
+  const dateLabel = formatDateLabel(now);
+  await pushText(config, buildTextSummary(dateLabel, events));
+
+  const city = findCity(tripConfig!.country, tripConfig!.city);
+  if (city) {
+    try {
+      const weather = await getTodayWeather(city, TOKYO_TIME_ZONE);
+      await pushText(config, formatWeatherText(city, weather));
+    } catch (err) {
+      console.error("查詢天氣失敗,略過天氣推播", err);
+    }
+  }
 }
 
 functions.http("dailyItinerary", async (req, res) => {
