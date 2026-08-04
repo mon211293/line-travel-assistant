@@ -1,3 +1,4 @@
+# reindex trigger
 name: Trigger LINE travel itinerary functions
 
 on:
