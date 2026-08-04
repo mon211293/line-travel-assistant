@@ -3,17 +3,12 @@ import { loadConfig, type AppConfig } from "./config";
 import { getTodayEvents, type CalendarEvent } from "./calendar";
 import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
-import { getTripConfig, isWithinTrip } from "./tripConfig";
+import { getTripConfig, isWithinTrip, getTimeZone } from "./tripConfig";
+import { getDateKey } from "./timeZoneUtil";
 
-const TOKYO_TIME_ZONE = "Asia/Tokyo";
-
-function getTokyoDateKey(day: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TOKYO_TIME_ZONE }).format(day);
-}
-
-function formatDateLabel(date: Date): string {
+function formatDateLabel(date: Date, timeZone: string): string {
   return date.toLocaleDateString("zh-TW", {
-    timeZone: TOKYO_TIME_ZONE,
+    timeZone,
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -21,11 +16,11 @@ function formatDateLabel(date: Date): string {
   });
 }
 
-function formatEventLine(event: CalendarEvent): string {
+function formatEventLine(event: CalendarEvent, timeZone: string): string {
   const header = event.allDay
     ? `・${event.title}(全天)`
     : `・${event.start.toLocaleTimeString("zh-TW", {
-        timeZone: TOKYO_TIME_ZONE,
+        timeZone,
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
@@ -38,28 +33,30 @@ function formatEventLine(event: CalendarEvent): string {
   return [header, ...detailLines].join("\n");
 }
 
-function buildTextSummary(dateLabel: string, events: CalendarEvent[]): string {
-  return [`🧳 ${dateLabel}`, "", "【今日行程】", "", events.map(formatEventLine).join("\n\n")].join("\n");
+function buildTextSummary(dateLabel: string, events: CalendarEvent[], timeZone: string): string {
+  return [`🧳 ${dateLabel}`, "", "【今日行程】", "", events.map((e) => formatEventLine(e, timeZone)).join("\n\n")].join("\n");
 }
 
 export async function dailyItinerary(config: AppConfig): Promise<void> {
-  const now = new Date();
-  const dateKey = getTokyoDateKey(now);
-
   const tripConfig = await getTripConfig();
+  const timeZone = getTimeZone(tripConfig);
+
+  const now = new Date();
+  const dateKey = getDateKey(now, timeZone);
+
   if (!isWithinTrip(tripConfig, dateKey)) {
     console.log("今天不在行程日期範圍內,跳過推播");
     return;
   }
 
-  const events = await getTodayEvents(config, now);
+  const events = await getTodayEvents(config, timeZone, now);
   if (events.length === 0) {
     console.log("今天沒有行程,跳過推播(避免打擾群組)");
     return;
   }
 
-  const dateLabel = formatDateLabel(now);
-  await pushText(config, buildTextSummary(dateLabel, events));
+  const dateLabel = formatDateLabel(now, timeZone);
+  await pushText(config, buildTextSummary(dateLabel, events, timeZone));
 }
 
 functions.http("dailyItinerary", async (req, res) => {

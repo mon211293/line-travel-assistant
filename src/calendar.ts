@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import type { AppConfig } from "./config";
+import { getDateKey, getUtcOffsetString } from "./timeZoneUtil";
 
 export interface CalendarEvent {
   id: string;
@@ -56,21 +57,14 @@ async function listEvents(
   return (res.data.items ?? []).map(toCalendarEvent);
 }
 
-const TOKYO_TIME_ZONE = "Asia/Tokyo";
-
-/** 取得 `day` 這個時間點在 Asia/Tokyo 時區對應的日期(YYYY-MM-DD)。
+/** 取得指定日期(預設今天,依 timeZone 判斷)當天這個旅行行事曆的事件,依開始時間排序。
  * Cloud Functions 執行環境的系統時區是 UTC,不能直接用 Date 的 setHours 算「當地日期」的起訖,
- * 否則在東京時間清晨觸發時,UTC 當下其實還是前一天,會抓到錯的一天。
- * 日曆本身時區也是 Asia/Tokyo(旅行期間人在日本),用同一個時區判斷「今天」最直覺。 */
-function getTokyoDateKey(day: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TOKYO_TIME_ZONE }).format(day);
-}
-
-/** 取得指定日期(預設今天,Asia/Tokyo)當天這個旅行行事曆的事件,依開始時間排序。 */
-export async function getTodayEvents(config: AppConfig, day: Date = new Date()): Promise<CalendarEvent[]> {
-  const dateKey = getTokyoDateKey(day);
-  const startOfDay = new Date(`${dateKey}T00:00:00+09:00`);
-  const endOfDay = new Date(`${dateKey}T23:59:59.999+09:00`);
+ * 否則在當地時間清晨觸發時,UTC 當下其實還是前一天,會抓到錯的一天。 */
+export async function getTodayEvents(config: AppConfig, timeZone: string, day: Date = new Date()): Promise<CalendarEvent[]> {
+  const dateKey = getDateKey(day, timeZone);
+  const offset = getUtcOffsetString(day, timeZone);
+  const startOfDay = new Date(`${dateKey}T00:00:00${offset}`);
+  const endOfDay = new Date(`${dateKey}T23:59:59.999${offset}`);
 
   return listEvents(config, {
     timeMin: startOfDay.toISOString(),

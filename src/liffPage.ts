@@ -1,4 +1,5 @@
 import { CITIES } from "./cities";
+import { TIME_ZONE_OPTIONS, DEFAULT_TIME_ZONE } from "./timeZoneUtil";
 
 /** 產生「行程設定」LIFF 頁面。用 LIFF ID Token 驗證,只有 OWNER_USER_ID 那個 LINE 帳號能看/能改——
  * 這個 Rich Menu 連結是這個官方帳號所有好友都看得到的同一個選單,所以一定要擋非擁有者,
@@ -6,6 +7,8 @@ import { CITIES } from "./cities";
 export function renderLiffPage(liffId: string): string {
   const citiesJson = JSON.stringify(CITIES);
   const liffIdJson = JSON.stringify(liffId);
+  const timeZoneOptionsJson = JSON.stringify(TIME_ZONE_OPTIONS);
+  const defaultTimeZoneJson = JSON.stringify(DEFAULT_TIME_ZONE);
 
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -40,13 +43,17 @@ export function renderLiffPage(liffId: string): string {
   <div id="formContent" style="display:none;">
   <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播行程,並在你設定的時間送上當天城市的天氣。</p>
 
+  <label for="timezone">行程時區</label>
+  <select id="timezone"></select>
+  <p style="font-size:12px;color:#999;margin:4px 0 0;">下面所有時間(天氣推播時間、預約訊息時間)都是用這個時區判斷。</p>
+
   <label for="startDate">開始日期</label>
   <input type="date" id="startDate" />
 
   <label for="endDate">結束日期</label>
   <input type="date" id="endDate" />
 
-  <label for="weatherTime">天氣推播時間(日本時間)</label>
+  <label for="weatherTime">天氣推播時間</label>
   <input type="time" id="weatherTime" />
 
   <h2>📍 每天到訪城市</h2>
@@ -59,7 +66,7 @@ export function renderLiffPage(liffId: string): string {
   <div class="msg-add-row">
     <label for="newMsgDate">日期</label>
     <input type="date" id="newMsgDate" />
-    <label for="newMsgTime">時間(日本時間)</label>
+    <label for="newMsgTime">時間</label>
     <input type="time" id="newMsgTime" />
     <label for="newMsgText">訊息內容</label>
     <textarea id="newMsgText" rows="3" placeholder="例如:記得去藥妝店買防曬"></textarea>
@@ -74,6 +81,8 @@ export function renderLiffPage(liffId: string): string {
 <script>
   const CITIES = ${citiesJson};
   const LIFF_ID = ${liffIdJson};
+  const TIME_ZONE_OPTIONS = ${timeZoneOptionsJson};
+  const DEFAULT_TIME_ZONE = ${defaultTimeZoneJson};
   const COUNTRIES = [...new Set(CITIES.map((c) => c.country))];
   let idToken = null;
 
@@ -87,12 +96,21 @@ export function renderLiffPage(liffId: string): string {
     document.getElementById("formContent").style.display = "none";
   }
 
+  const timezoneEl = document.getElementById("timezone");
   const startDateEl = document.getElementById("startDate");
   const endDateEl = document.getElementById("endDate");
   const weatherTimeEl = document.getElementById("weatherTime");
   const dayCitiesEl = document.getElementById("dayCities");
   const statusEl = document.getElementById("status");
   weatherTimeEl.value = "07:00";
+
+  for (const tz of TIME_ZONE_OPTIONS) {
+    const opt = document.createElement("option");
+    opt.value = tz.value;
+    opt.textContent = tz.label;
+    timezoneEl.appendChild(opt);
+  }
+  timezoneEl.value = DEFAULT_TIME_ZONE;
 
   let cityByDate = {}; // dateKey -> { country, city }
   let scheduledMessages = []; // [{ id, date, time, text }]
@@ -246,6 +264,7 @@ export function renderLiffPage(liffId: string): string {
     try {
       const data = await res.json();
       if (data.config) {
+        timezoneEl.value = data.config.timezone || DEFAULT_TIME_ZONE;
         startDateEl.value = data.config.startDate;
         endDateEl.value = data.config.endDate;
         weatherTimeEl.value = data.config.weatherTime || "07:00";
@@ -283,6 +302,7 @@ export function renderLiffPage(liffId: string): string {
         method: "PUT",
         headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
         body: JSON.stringify({
+          timezone: timezoneEl.value,
           startDate: startDateEl.value,
           endDate: endDateEl.value,
           weatherTime: weatherTimeEl.value || "07:00",

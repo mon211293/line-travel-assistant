@@ -1,4 +1,5 @@
 import { Firestore } from "@google-cloud/firestore";
+import { DEFAULT_TIME_ZONE } from "./timeZoneUtil";
 
 const COLLECTION = "trip-config";
 // 這個機器人只服務單一旅遊群組(見 config.ts 的 TRAVEL_TARGET_GROUP_ID),
@@ -17,18 +18,24 @@ export interface CityRef {
 export interface ScheduledMessage {
   id: string;
   date: string; // YYYY-MM-DD
-  time: string; // HH:mm,Asia/Tokyo
+  time: string; // HH:mm,依 config.timezone 判斷
   text: string;
 }
 
 export interface TripConfig {
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  weatherTime?: string; // HH:mm,Asia/Tokyo,不設定時預設 07:00
+  /** 整個行程共用同一個時區,用來判斷「今天」跟所有時間比對的基準。不設定時預設 Asia/Tokyo(向下相容舊資料)。 */
+  timezone?: string;
+  weatherTime?: string; // HH:mm,不設定時預設 07:00
   /** 每天到訪的城市,key 是 YYYY-MM-DD。某天沒設定就當天不推播天氣(例如還在移動、還沒決定)。 */
   cityByDate: Record<string, CityRef>;
   /** 使用者自訂的預約訊息,每則只在指定的日期+時間發送一次。沒有設定就完全不會多發任何東西。 */
   scheduledMessages: ScheduledMessage[];
+}
+
+export function getTimeZone(config: TripConfig | null): string {
+  return config?.timezone ?? DEFAULT_TIME_ZONE;
 }
 
 export async function getTripConfig(): Promise<TripConfig | null> {

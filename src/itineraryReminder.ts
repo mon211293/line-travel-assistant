@@ -4,17 +4,14 @@ import { getUpcomingEvents, type CalendarEvent } from "./calendar";
 import { hasBeenNotified, markNotified } from "./reminderStore";
 import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
-import { getTripConfig, isWithinTrip } from "./tripConfig";
+import { getTripConfig, isWithinTrip, getTimeZone } from "./tripConfig";
+import { getDateKey } from "./timeZoneUtil";
 
 const REMINDER_WINDOW_MINUTES = Number(process.env.REMINDER_WINDOW_MINUTES ?? 60);
 
-function getTokyoDateKey(day: Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(day);
-}
-
-function formatReminderText(event: CalendarEvent): string {
+function formatReminderText(event: CalendarEvent, timeZone: string): string {
   const time = event.start.toLocaleTimeString("zh-TW", {
-    timeZone: "Asia/Tokyo",
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -26,14 +23,15 @@ function formatReminderText(event: CalendarEvent): string {
 
 export async function itineraryReminder(config: AppConfig): Promise<void> {
   const tripConfig = await getTripConfig();
-  if (!isWithinTrip(tripConfig, getTokyoDateKey(new Date()))) return;
+  const timeZone = getTimeZone(tripConfig);
+  if (!isWithinTrip(tripConfig, getDateKey(new Date(), timeZone))) return;
 
   const events = await getUpcomingEvents(config, REMINDER_WINDOW_MINUTES);
 
   for (const event of events) {
     if (await hasBeenNotified(event.id)) continue;
 
-    await pushText(config, formatReminderText(event));
+    await pushText(config, formatReminderText(event, timeZone));
     await markNotified(event.id);
   }
 }

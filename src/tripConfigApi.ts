@@ -2,6 +2,7 @@ import type { Request, Response } from "@google-cloud/functions-framework";
 import { getTripConfig, setTripConfig, type TripConfig, type ScheduledMessage } from "./tripConfig";
 import { findCity } from "./cities";
 import { verifyLiffIdToken } from "./liffAuth";
+import { isKnownTimeZone } from "./timeZoneUtil";
 
 /** 這個設定頁只有旅遊管家的擁有者能看/能改,其他加這個 LINE 官方帳號為好友的人一律擋掉。 */
 async function authenticateOwner(req: Request): Promise<boolean> {
@@ -22,6 +23,7 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
   if (typeof b.endDate !== "string" || !DATE_PATTERN.test(b.endDate)) return null;
   if (b.startDate > b.endDate) return null;
   if (b.weatherTime !== undefined && (typeof b.weatherTime !== "string" || !TIME_PATTERN.test(b.weatherTime))) return null;
+  if (b.timezone !== undefined && (typeof b.timezone !== "string" || !isKnownTimeZone(b.timezone))) return null;
 
   const cityByDateRaw = b.cityByDate as Record<string, { country?: unknown; city?: unknown }> | undefined;
   const cityByDate: TripConfig["cityByDate"] = {};
@@ -48,6 +50,7 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
   return {
     startDate: b.startDate,
     endDate: b.endDate,
+    timezone: typeof b.timezone === "string" ? b.timezone : undefined,
     weatherTime: typeof b.weatherTime === "string" ? b.weatherTime : undefined,
     cityByDate,
     scheduledMessages,
