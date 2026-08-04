@@ -16,13 +16,3 @@ export async function pushText(config: AppConfig, text: string): Promise<void> {
     messages: [{ type: "text", text }],
   });
 }
-
-/** 回覆使用者這次傳來的訊息(用 webhook 事件附的 replyToken,免費且即時)。 */
-export async function replyText(config: AppConfig, replyToken: string, text: string): Promise<void> {
-  const client = buildClient(config);
-
-  await client.replyMessage({
-    replyToken,
-    messages: [{ type: "text", text }],
-  });
-}
