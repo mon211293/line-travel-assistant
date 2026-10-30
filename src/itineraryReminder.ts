@@ -6,6 +6,7 @@ import { pushText } from "./line";
 import { isAuthorizedTrigger } from "./httpAuth";
 import { getTripConfig, isWithinTrip, getTimeZone } from "./tripConfig";
 import { getDateKey } from "./timeZoneUtil";
+import { mapsUrl } from "./dailyContent";
 
 const REMINDER_WINDOW_MINUTES = Number(process.env.REMINDER_WINDOW_MINUTES ?? 60);
 
@@ -16,7 +17,8 @@ function formatReminderText(event: CalendarEvent, timeZone: string): string {
     minute: "2-digit",
     hour12: false,
   });
-  const location = event.location ? `\n📍 ${event.location}` : "";
+  const mapUrl = event.location ? mapsUrl(event.location) : null;
+  const location = event.location ? `\n📍 ${event.location}${mapUrl ? `\n🗺 ${mapUrl}` : ""}` : "";
   const description = event.description ? `\n📝 ${event.description}` : "";
   return `⏰ 即將開始:${event.title}\n🕐 ${time}${location}${description}`;
 }

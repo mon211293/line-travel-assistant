@@ -37,14 +37,16 @@ export interface DailyWeather {
   precipitationProbability: number | null;
 }
 
-/** 用 Open-Meteo(免費、不用 API key)查指定城市「今天」的天氣預報。 */
-export async function getTodayWeather(city: City, timeZone: string): Promise<DailyWeather> {
+/** 用 Open-Meteo(免費、不用 API key)查指定城市某一天(dateKey,YYYY-MM-DD)的天氣預報。
+ * Open-Meteo 只提供未來約 16 天內的預報,超過會回 400。 */
+export async function getDayWeather(city: City, timeZone: string, dateKey: string): Promise<DailyWeather> {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(city.lat));
   url.searchParams.set("longitude", String(city.lon));
   url.searchParams.set("daily", "weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max");
   url.searchParams.set("timezone", timeZone);
-  url.searchParams.set("forecast_days", "1");
+  url.searchParams.set("start_date", dateKey);
+  url.searchParams.set("end_date", dateKey);
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Open-Meteo 查詢失敗: ${res.status}`);
@@ -66,8 +68,8 @@ export async function getTodayWeather(city: City, timeZone: string): Promise<Dai
   };
 }
 
-export function formatWeatherText(city: City, weather: DailyWeather): string {
+export function formatWeatherText(city: City, weather: DailyWeather, dayLabel = "今日"): string {
   const label = describeWeatherCode(weather.weatherCode);
   const rain = weather.precipitationProbability !== null ? `\n☔ 降雨機率 ${weather.precipitationProbability}%` : "";
-  return `🌤️ ${city.cityLabel}今日天氣\n${label},${weather.tempMin}°C ~ ${weather.tempMax}°C${rain}`;
+  return `🌤️ ${city.cityLabel}${dayLabel}天氣\n${label},${weather.tempMin}°C ~ ${weather.tempMax}°C${rain}`;
 }

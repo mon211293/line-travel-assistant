@@ -84,3 +84,16 @@ export async function getUpcomingEvents(config: AppConfig, withinMinutes: number
 
   return events.filter((event) => !event.allDay);
 }
+
+const NEXT_EVENT_LOOKAHEAD_DAYS = 30;
+
+/** 取得現在之後最近一個還沒開始的(非全天)事件,最多往後看 30 天;沒有就回傳 null。
+ * 只列出「還沒開始」的,因為 events.list 會把進行中的事件也列出來(它依結束時間過濾)。 */
+export async function getNextEvents(config: AppConfig): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const events = await listEvents(config, {
+    timeMin: now.toISOString(),
+    timeMax: new Date(now.getTime() + NEXT_EVENT_LOOKAHEAD_DAYS * 24 * 60 * 60_000).toISOString(),
+  });
+  return events.filter((event) => !event.allDay && event.start > now);
+}

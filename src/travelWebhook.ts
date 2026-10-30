@@ -6,11 +6,11 @@ import { handleTripConfigApi } from "./tripConfigApi";
 import { setBoundGroupId } from "./targetGroupStore";
 import { getTripConfig, getTimeZone, pickAutoReply } from "./tripConfig";
 import { getDateKey } from "./timeZoneUtil";
-import { buildItinerarySection, buildWeatherSection, formatDateLabel } from "./dailyContent";
+import { buildItinerarySection, buildWeatherSection, formatDateLabel, formatEventLine, mapsUrl } from "./dailyContent";
+import { getNextEvents } from "./calendar";
+import { parseCommand } from "./commandParser";
 
 const BIND_COMMAND = "綁定群組";
-const ITINERARY_KEYWORD = "行程";
-const WEATHER_KEYWORD = "天氣";
 
 /** 這個官方帳號所有好友都能私訊它,所以只回覆旅遊群組本身,或擁有者的 1 對 1,
  * 避免陌生人加好友後輸入「行程」就看到整個旅遊行程。 */
@@ -21,27 +21,71 @@ function isAllowedSource(source: WebhookEvent["source"], targetGroupId: string):
   return false;
 }
 
+const HELP_TEXT = [
+  "📖 可以問我:",
+  "・行程 / 明天行程 / 11/20 行程",
+  "・下一個行程",
+  "・導航(下一個有地點的行程,附地圖連結)",
+  "・天氣 / 明天天氣 / 11/20 天氣",
+].join("\n");
+
+function dayFromKey(dateKey: string): Date {
+  // 用 UTC 正午代表那一天,對 UTC+7~+9 的行程時區來說都還是同一個日期。
+  return new Date(`${dateKey}T12:00:00Z`);
+}
+
+function dayLabelFor(dateKey: string, todayKey: string): string {
+  if (dateKey === todayKey) return "今日";
+  return ` ${Number(dateKey.slice(5, 7))}/${Number(dateKey.slice(8, 10))} `;
+}
+
 /** 依關鍵字算出要回覆的文字;不是關鍵字就回傳 null(機器人不吭聲,不打擾群組聊天)。
- * 自訂的自動回覆優先於內建的「行程」「天氣」。 */
+ * 自訂的自動回覆優先於內建指令。 */
 async function buildKeywordReply(text: string, config: AppConfig): Promise<string | null> {
   const tripConfig = await getTripConfig();
   const timeZone = getTimeZone(tripConfig);
-  const now = new Date();
+  const todayKey = getDateKey(new Date(), timeZone);
 
-  const custom = pickAutoReply(tripConfig?.autoReplies ?? [], text, getDateKey(now, timeZone));
+  const custom = pickAutoReply(tripConfig?.autoReplies ?? [], text, todayKey);
   if (custom) return custom;
 
-  if (text === ITINERARY_KEYWORD) {
-    const itinerary = await buildItinerarySection(config, timeZone, now);
-    return itinerary ? `🧳 ${formatDateLabel(now, timeZone)}\n\n${itinerary}` : "今天沒有安排行程 🎉";
-  }
+  const command = parseCommand(text, todayKey, tripConfig?.startDate);
+  if (!command) return null;
 
-  if (text === WEATHER_KEYWORD) {
-    const weather = await buildWeatherSection(tripConfig, timeZone, now);
-    return weather ?? "今天還沒有設定所在城市,查不到天氣(可以到「行程設定」選今天的城市)。";
-  }
+  switch (command.type) {
+    case "help":
+      return HELP_TEXT;
 
-  return null;
+    case "itinerary": {
+      const day = dayFromKey(command.dateKey);
+      const title = command.dateKey === todayKey ? "今日行程" : "行程";
+      const itinerary = await buildItinerarySection(config, timeZone, day, title);
+      return itinerary ? `🧳 ${formatDateLabel(day, timeZone)}\n\n${itinerary}` : `${formatDateLabel(day, timeZone)}沒有安排行程 🎉`;
+    }
+
+    case "weather": {
+      const day = dayFromKey(command.dateKey);
+      try {
+        const weather = await buildWeatherSection(tripConfig, timeZone, command.dateKey, dayLabelFor(command.dateKey, todayKey));
+        return weather ?? `${formatDateLabel(day, timeZone)}還沒有設定所在城市,查不到天氣(可以到「行程設定」選那天的城市)。`;
+      } catch (err) {
+        console.error("天氣查詢失敗", err);
+        return "天氣查詢失敗了(只能查今天起 16 天內的預報),請稍後再試。";
+      }
+    }
+
+    case "next": {
+      const next = (await getNextEvents(config))[0];
+      if (!next) return "接下來沒有安排行程 🎉";
+      return `⏭ 下一個行程\n${formatDateLabel(next.start, timeZone)}\n${formatEventLine(next, timeZone)}`;
+    }
+
+    case "navigate": {
+      const next = (await getNextEvents(config)).find((e) => e.location && mapsUrl(e.location));
+      if (!next) return "接下來的行程都沒有填地點,沒辦法導航(可以在行事曆的「地點」欄位填上)。";
+      return `🧭 導航\n${formatDateLabel(next.start, timeZone)}\n${formatEventLine(next, timeZone)}`;
+    }
+  }
 }
 
 async function handleEvent(event: WebhookEvent, config: AppConfig): Promise<void> {
