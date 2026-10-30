@@ -1,4 +1,5 @@
 import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
+import { getBoundGroupId } from "./targetGroupStore";
 
 const secretClient = new SecretManagerServiceClient();
 
@@ -56,11 +57,14 @@ export async function loadConfig(): Promise<AppConfig> {
     getSecret("TRAVEL_TRIGGER_SECRET"),
   ]);
 
+  // 在群組裡打「綁定群組」記下的 ID 優先於 Secret 裡的預設值,這樣換群組不用動 Secret。
+  const boundGroupId = await getBoundGroupId();
+
   return {
     line: {
       channelAccessToken: lineChannelAccessToken,
       channelSecret: lineChannelSecret,
-      targetGroupId: lineTargetGroupId,
+      targetGroupId: boundGroupId ?? lineTargetGroupId,
     },
     google: {
       clientId: googleClientId,
