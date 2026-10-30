@@ -2,7 +2,7 @@ name: Trigger LINE travel itinerary functions
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # 每 15 分鐘檢查:每日行程推播、即將開始的活動、預約訊息
+    - cron: "*/15 * * * *" # 每 15 分鐘檢查:每日行程推播、預約訊息
   workflow_dispatch:
 
 jobs:
@@ -13,12 +13,6 @@ jobs:
         if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
         run: |
           curl -sf -X POST "https://dailyitinerary-tl6b6jk2mq-de.a.run.app/" \
-            -H "x-trigger-secret: ${{ secrets.TRIGGER_SECRET }}"
-
-      - name: Trigger itineraryReminder
-        if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
-        run: |
-          curl -sf -X POST "https://itineraryreminder-tl6b6jk2mq-de.a.run.app/" \
             -H "x-trigger-secret: ${{ secrets.TRIGGER_SECRET }}"
 
       - name: Trigger scheduledMessagePush

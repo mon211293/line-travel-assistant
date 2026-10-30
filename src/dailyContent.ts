@@ -36,7 +36,11 @@ export function formatEventLine(event: CalendarEvent, timeZone: string): string 
     const url = mapsUrl(event.location);
     if (url) detailLines.push(`    🗺 ${url}`);
   }
-  if (event.description) detailLines.push(`    📝 ${event.description}`);
+  if (event.description) {
+    // 說明可能有多行,第二行起縮排對齊,不然每日訊息裡會貼著左邊很亂。
+    const [first, ...rest] = event.description.split("\n");
+    detailLines.push(`    📝 ${first}`, ...rest.map((line) => `       ${line}`));
+  }
 
   return [header, ...detailLines].join("\n");
 }

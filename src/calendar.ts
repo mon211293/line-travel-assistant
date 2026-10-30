@@ -72,19 +72,6 @@ export async function getTodayEvents(config: AppConfig, timeZone: string, day: D
   });
 }
 
-/** 取得從現在起 withinMinutes 分鐘內、即將開始的事件。 */
-export async function getUpcomingEvents(config: AppConfig, withinMinutes: number): Promise<CalendarEvent[]> {
-  const now = new Date();
-  const horizon = new Date(now.getTime() + withinMinutes * 60_000);
-
-  const events = await listEvents(config, {
-    timeMin: now.toISOString(),
-    timeMax: horizon.toISOString(),
-  });
-
-  return events.filter((event) => !event.allDay);
-}
-
 const NEXT_EVENT_LOOKAHEAD_DAYS = 30;
 
 /** 取得現在之後最近一個還沒開始的(非全天)事件,最多往後看 30 天;沒有就回傳 null。
