@@ -41,11 +41,11 @@ export function renderLiffPage(liffId: string): string {
   <div id="authMessage" style="display:none;color:#e05555;font-weight:bold;padding:12px;background:#fff0f0;border-radius:8px;"></div>
 
   <div id="formContent" style="display:none;">
-  <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播行程,並在你設定的時間送上當天城市的天氣。</p>
+  <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播行程。天氣、班機等資訊不主動推播,有人在群組輸入關鍵字(例如「天氣」)時才回覆。</p>
 
   <label for="timezone">行程時區</label>
   <select id="timezone"></select>
-  <p style="font-size:12px;color:#999;margin:4px 0 0;">下面所有時間(天氣推播時間、預約訊息時間)都是用這個時區判斷。</p>
+  <p style="font-size:12px;color:#999;margin:4px 0 0;">下面所有時間(每日行程推播時間、預約訊息時間)都是用這個時區判斷。</p>
 
   <label for="startDate">開始日期</label>
   <input type="date" id="startDate" />
@@ -53,10 +53,11 @@ export function renderLiffPage(liffId: string): string {
   <label for="endDate">結束日期</label>
   <input type="date" id="endDate" />
 
-  <label for="weatherTime">天氣推播時間</label>
+  <label for="weatherTime">每日行程推播時間</label>
   <input type="time" id="weatherTime" />
 
   <h2>📍 每天到訪城市</h2>
+  <p style="font-size:13px;color:#666;margin:4px 0 0;">在群組輸入「天氣」,機器人會回覆當天所在城市的天氣。</p>
   <div id="dayCities"></div>
 
   <h2>📨 預約訊息</h2>
@@ -71,6 +72,21 @@ export function renderLiffPage(liffId: string): string {
     <label for="newMsgText">訊息內容</label>
     <textarea id="newMsgText" rows="3" placeholder="例如:記得去藥妝店買防曬"></textarea>
     <button id="addMessage" class="msg-add-btn" type="button">＋ 新增預約訊息</button>
+  </div>
+
+  <h2>💬 自動回覆</h2>
+  <p style="font-size:13px;color:#666;margin:4px 0 0;">有人在群組輸入關鍵字,機器人就回覆你設定的內容(不佔推播額度)。內建關鍵字:「行程」回覆今天行程、「天氣」回覆今天天氣。</p>
+  <p style="font-size:13px;color:#666;margin:4px 0 0;">同一個關鍵字可以設多則,用「從這天起」切換。例如「班機」:先設去程(日期留空),再設回程並填出發日的隔天,出發日當天還是回覆去程。</p>
+  <div id="replyList"></div>
+
+  <div class="msg-add-row">
+    <label for="newReplyKeyword">關鍵字</label>
+    <input type="text" id="newReplyKeyword" placeholder="例如:班機" />
+    <label for="newReplyFrom">從這天起回覆這則(可留空 = 一開始就用)</label>
+    <input type="date" id="newReplyFrom" />
+    <label for="newReplyText">回覆內容</label>
+    <textarea id="newReplyText" rows="4" placeholder="例如:去程 11/18 台北→曼谷 BR211 08:30 ..."></textarea>
+    <button id="addReply" class="msg-add-btn" type="button">＋ 新增自動回覆</button>
   </div>
 
   <button id="save">儲存</button>
@@ -114,6 +130,7 @@ export function renderLiffPage(liffId: string): string {
 
   let cityByDate = {}; // dateKey -> { country, city }
   let scheduledMessages = []; // [{ id, date, time, text }]
+  let autoReplies = []; // [{ id, keyword, fromDate?, text }]
 
   function makeMessageId() {
     return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "msg-" + Date.now() + "-" + Math.random().toString(36).slice(2);
@@ -150,6 +167,44 @@ export function renderLiffPage(liffId: string): string {
       deleteBtn.addEventListener("click", () => {
         scheduledMessages = scheduledMessages.filter((m) => m.id !== msg.id);
         renderMessageList();
+      });
+      row.appendChild(deleteBtn);
+
+      listEl.appendChild(row);
+    }
+  }
+
+  function renderReplyList() {
+    const listEl = document.getElementById("replyList");
+    listEl.innerHTML = "";
+
+    if (autoReplies.length === 0) {
+      listEl.innerHTML = "<p style='color:#999;font-size:13px;'>目前沒有自訂自動回覆</p>";
+      return;
+    }
+
+    const sorted = [...autoReplies].sort((a, b) => a.keyword.localeCompare(b.keyword) || (a.fromDate || "").localeCompare(b.fromDate || ""));
+    for (const reply of sorted) {
+      const row = document.createElement("div");
+      row.className = "msg-row";
+
+      const meta = document.createElement("div");
+      meta.className = "msg-meta";
+      meta.textContent = "「" + reply.keyword + "」" + (reply.fromDate ? " ・ " + formatDayLabel(reply.fromDate) + " 起" : " ・ 預設");
+      row.appendChild(meta);
+
+      const text = document.createElement("div");
+      text.className = "msg-text";
+      text.textContent = reply.text;
+      row.appendChild(text);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "msg-delete";
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "刪除";
+      deleteBtn.addEventListener("click", () => {
+        autoReplies = autoReplies.filter((r) => r.id !== reply.id);
+        renderReplyList();
       });
       row.appendChild(deleteBtn);
 
@@ -254,6 +309,26 @@ export function renderLiffPage(liffId: string): string {
     renderMessageList();
   });
 
+  document.getElementById("addReply").addEventListener("click", () => {
+    const keywordEl = document.getElementById("newReplyKeyword");
+    const fromEl = document.getElementById("newReplyFrom");
+    const textEl = document.getElementById("newReplyText");
+
+    if (!keywordEl.value.trim() || !textEl.value.trim()) {
+      statusEl.textContent = "請填完關鍵字和回覆內容再新增";
+      return;
+    }
+
+    const reply = { id: makeMessageId(), keyword: keywordEl.value.trim(), text: textEl.value.trim() };
+    if (fromEl.value) reply.fromDate = fromEl.value;
+    autoReplies.push(reply);
+    keywordEl.value = "";
+    fromEl.value = "";
+    textEl.value = "";
+    statusEl.textContent = "";
+    renderReplyList();
+  });
+
   async function loadConfig() {
     const res = await fetch("api/config", { headers: authHeaders() });
     if (res.status === 403 || res.status === 401) {
@@ -270,6 +345,7 @@ export function renderLiffPage(liffId: string): string {
         weatherTimeEl.value = data.config.weatherTime || "07:00";
         cityByDate = data.config.cityByDate || {};
         scheduledMessages = data.config.scheduledMessages || [];
+        autoReplies = data.config.autoReplies || [];
       }
     } catch (err) {
       // 沒有既有設定就當作全新開始
@@ -277,6 +353,7 @@ export function renderLiffPage(liffId: string): string {
     document.getElementById("formContent").style.display = "block";
     renderDayRows();
     renderMessageList();
+    renderReplyList();
   }
 
   document.getElementById("save").addEventListener("click", async () => {
@@ -308,6 +385,7 @@ export function renderLiffPage(liffId: string): string {
           weatherTime: weatherTimeEl.value || "07:00",
           cityByDate: newCityByDate,
           scheduledMessages,
+          autoReplies,
         }),
       });
       if (!res.ok) throw new Error("儲存失敗");

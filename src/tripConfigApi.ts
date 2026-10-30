@@ -1,5 +1,5 @@
 import type { Request, Response } from "@google-cloud/functions-framework";
-import { getTripConfig, setTripConfig, type TripConfig, type ScheduledMessage } from "./tripConfig";
+import { getTripConfig, setTripConfig, type TripConfig, type ScheduledMessage, type AutoReply } from "./tripConfig";
 import { findCity } from "./cities";
 import { verifyLiffIdToken } from "./liffAuth";
 import { isKnownTimeZone } from "./timeZoneUtil";
@@ -47,6 +47,20 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
     scheduledMessages.push({ id: m.id, date: m.date, time: m.time, text: m.text.trim() });
   }
 
+  const autoRepliesRaw = Array.isArray(b.autoReplies) ? b.autoReplies : [];
+  const autoReplies: AutoReply[] = [];
+  for (const item of autoRepliesRaw as unknown[]) {
+    const r = item as Record<string, unknown>;
+    if (typeof r.id !== "string" || r.id.length === 0) continue;
+    if (typeof r.keyword !== "string" || r.keyword.trim().length === 0 || r.keyword.trim().length > 30) continue;
+    if (typeof r.text !== "string" || r.text.trim().length === 0 || r.text.length > 5000) continue;
+    if (r.fromDate !== undefined && r.fromDate !== "" && (typeof r.fromDate !== "string" || !DATE_PATTERN.test(r.fromDate))) continue;
+    // Firestore 不接受 undefined 欄位,沒填日期就整個欄位省略。
+    const reply: AutoReply = { id: r.id, keyword: r.keyword.trim(), text: r.text.trim() };
+    if (typeof r.fromDate === "string" && r.fromDate) reply.fromDate = r.fromDate;
+    autoReplies.push(reply);
+  }
+
   return {
     startDate: b.startDate,
     endDate: b.endDate,
@@ -54,6 +68,7 @@ function parseTripConfigInput(body: unknown): TripConfig | null {
     weatherTime: typeof b.weatherTime === "string" ? b.weatherTime : undefined,
     cityByDate,
     scheduledMessages,
+    autoReplies,
   };
 }
 

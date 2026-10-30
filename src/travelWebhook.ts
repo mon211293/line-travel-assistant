@@ -1,14 +1,51 @@
 import * as functions from "@google-cloud/functions-framework";
 import { messagingApi, validateSignature, type WebhookEvent } from "@line/bot-sdk";
-import { loadConfig } from "./config";
+import { loadConfig, type AppConfig } from "./config";
 import { renderLiffPage } from "./liffPage";
 import { handleTripConfigApi } from "./tripConfigApi";
 import { setBoundGroupId } from "./targetGroupStore";
+import { getTripConfig, getTimeZone, pickAutoReply } from "./tripConfig";
+import { getDateKey } from "./timeZoneUtil";
+import { buildItinerarySection, buildWeatherSection, formatDateLabel } from "./dailyContent";
 
 const BIND_COMMAND = "綁定群組";
+const ITINERARY_KEYWORD = "行程";
+const WEATHER_KEYWORD = "天氣";
 
-async function handleEvent(event: WebhookEvent, accessToken: string): Promise<void> {
-  const client = new messagingApi.MessagingApiClient({ channelAccessToken: accessToken });
+/** 這個官方帳號所有好友都能私訊它,所以只回覆旅遊群組本身,或擁有者的 1 對 1,
+ * 避免陌生人加好友後輸入「行程」就看到整個旅遊行程。 */
+function isAllowedSource(source: WebhookEvent["source"], targetGroupId: string): boolean {
+  if (!source) return false;
+  if (source.type === "group") return source.groupId === targetGroupId;
+  if (source.type === "user") return source.userId === process.env.OWNER_USER_ID;
+  return false;
+}
+
+/** 依關鍵字算出要回覆的文字;不是關鍵字就回傳 null(機器人不吭聲,不打擾群組聊天)。
+ * 自訂的自動回覆優先於內建的「行程」「天氣」。 */
+async function buildKeywordReply(text: string, config: AppConfig): Promise<string | null> {
+  const tripConfig = await getTripConfig();
+  const timeZone = getTimeZone(tripConfig);
+  const now = new Date();
+
+  const custom = pickAutoReply(tripConfig?.autoReplies ?? [], text, getDateKey(now, timeZone));
+  if (custom) return custom;
+
+  if (text === ITINERARY_KEYWORD) {
+    const itinerary = await buildItinerarySection(config, timeZone, now);
+    return itinerary ? `🧳 ${formatDateLabel(now, timeZone)}\n\n${itinerary}` : "今天沒有安排行程 🎉";
+  }
+
+  if (text === WEATHER_KEYWORD) {
+    const weather = await buildWeatherSection(tripConfig, timeZone, now);
+    return weather ?? "今天還沒有設定所在城市,查不到天氣(可以到「行程設定」選今天的城市)。";
+  }
+
+  return null;
+}
+
+async function handleEvent(event: WebhookEvent, config: AppConfig): Promise<void> {
+  const client = new messagingApi.MessagingApiClient({ channelAccessToken: config.line.channelAccessToken });
 
   // 回覆訊息(replyToken)免費、不算推播額度,所以這裡一律用 reply,不用 push。
   if (event.type === "join") {
@@ -20,7 +57,14 @@ async function handleEvent(event: WebhookEvent, accessToken: string): Promise<vo
   }
 
   if (event.type !== "message" || event.message.type !== "text") return;
-  if (event.message.text.trim() !== BIND_COMMAND) return;
+  const text = event.message.text.trim();
+
+  if (text !== BIND_COMMAND) {
+    if (!isAllowedSource(event.source, config.line.targetGroupId)) return;
+    const reply = await buildKeywordReply(text, config);
+    if (reply) await client.replyMessage({ replyToken: event.replyToken, messages: [{ type: "text", text: reply }] });
+    return;
+  }
 
   // 只有設定頁的擁有者能綁定,避免群組裡其他人把推播目標搶走。
   if (event.source.userId !== process.env.OWNER_USER_ID) return;
@@ -41,7 +85,8 @@ async function handleEvent(event: WebhookEvent, accessToken: string): Promise<vo
 
 // 這個 Cloud Function 服務兩件事:
 // 1. 「行程設定」LIFF 網頁(GET /liff)與它呼叫的 API(/api/config);
-// 2. LINE webhook(POST /):目前只處理「綁定群組」指令與加入群組事件。
+// 2. LINE webhook(POST /):「綁定群組」、加入群組事件,以及關鍵字自動回覆(行程/天氣/自訂)。
+//    全部用免費的回覆訊息(replyToken),不消耗每月推播額度。
 functions.http("travelWebhook", async (req, res) => {
   if (req.path === "/liff") {
     const liffId = process.env.LIFF_ID ?? "";
@@ -66,7 +111,8 @@ functions.http("travelWebhook", async (req, res) => {
 
       const events: WebhookEvent[] = req.body?.events ?? [];
       for (const event of events) {
-        await handleEvent(event, config.line.channelAccessToken);
+        // 單一事件失敗(例如天氣服務暫時掛掉)不該讓整個 webhook 回 500 觸發 LINE 重送。
+        await handleEvent(event, config).catch((err) => console.error("handleEvent failed", err));
       }
       res.status(200).send("OK");
     } catch (err) {
