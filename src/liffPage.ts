@@ -41,7 +41,7 @@ export function renderLiffPage(liffId: string): string {
   <div id="authMessage" style="display:none;color:#e05555;font-weight:bold;padding:12px;background:#fff0f0;border-radius:8px;"></div>
 
   <div id="formContent" style="display:none;">
-  <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播行程。天氣、班機等資訊不主動推播,有人在群組輸入關鍵字(例如「天氣」)時才回覆。</p>
+  <p style="font-size:13px;color:#666;">設定旅遊日期後,可以幫每一天分別選要去的城市,機器人只會在這段期間每天推播一則「當天行程 + 當地天氣與提醒」。班機等其他資訊不主動推播,有人在群組輸入關鍵字時才回覆。</p>
 
   <label for="timezone">行程時區</label>
   <select id="timezone"></select>
@@ -57,7 +57,7 @@ export function renderLiffPage(liffId: string): string {
   <input type="time" id="weatherTime" />
 
   <h2>📍 每天到訪城市</h2>
-  <p style="font-size:13px;color:#666;margin:4px 0 0;">在群組輸入「天氣」,機器人會回覆當天所在城市的天氣。</p>
+  <p style="font-size:13px;color:#666;margin:4px 0 0;">每日推播和群組輸入「天氣」時,都用這裡選的城市查天氣。</p>
   <div id="dayCities"></div>
 
   <h2>📨 預約訊息</h2>

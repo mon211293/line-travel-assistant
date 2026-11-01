@@ -35,6 +35,7 @@ export interface DailyWeather {
   tempMax: number;
   tempMin: number;
   precipitationProbability: number | null;
+  uvIndexMax: number | null;
 }
 
 /** 用 Open-Meteo(免費、不用 API key)查指定城市某一天(dateKey,YYYY-MM-DD)的天氣預報。
@@ -43,7 +44,7 @@ export async function getDayWeather(city: City, timeZone: string, dateKey: strin
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(city.lat));
   url.searchParams.set("longitude", String(city.lon));
-  url.searchParams.set("daily", "weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max");
+  url.searchParams.set("daily", "weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max");
   url.searchParams.set("timezone", timeZone);
   url.searchParams.set("start_date", dateKey);
   url.searchParams.set("end_date", dateKey);
@@ -57,6 +58,7 @@ export async function getDayWeather(city: City, timeZone: string, dateKey: strin
       temperature_2m_max: number[];
       temperature_2m_min: number[];
       precipitation_probability_max: number[];
+      uv_index_max: number[];
     };
   };
 
@@ -65,11 +67,27 @@ export async function getDayWeather(city: City, timeZone: string, dateKey: strin
     tempMax: data.daily.temperature_2m_max[0],
     tempMin: data.daily.temperature_2m_min[0],
     precipitationProbability: data.daily.precipitation_probability_max?.[0] ?? null,
+    uvIndexMax: data.daily.uv_index_max?.[0] ?? null,
   };
+}
+
+const THUNDERSTORM_CODES = new Set([95, 96, 99]);
+
+/** 依預報數據挑出旅途中要注意的事;都沒有符合的條件就回傳空陣列。 */
+export function buildWeatherTips(weather: DailyWeather): string[] {
+  const tips: string[] = [];
+  if (weather.uvIndexMax !== null && weather.uvIndexMax >= 6) tips.push("🧴 紫外線強,記得防曬");
+  if (weather.tempMax >= 30) tips.push("🥤 天氣炎熱,多喝水");
+  if (weather.precipitationProbability !== null && weather.precipitationProbability >= 50) tips.push("🌂 可能下雨,記得帶傘");
+  if (THUNDERSTORM_CODES.has(weather.weatherCode)) tips.push("⚡ 有雷雨,戶外活動注意安全");
+  if (weather.tempMin <= 15) tips.push("🧥 早晚偏冷,多帶件外套");
+  return tips;
 }
 
 export function formatWeatherText(city: City, weather: DailyWeather, dayLabel = "今日"): string {
   const label = describeWeatherCode(weather.weatherCode);
   const rain = weather.precipitationProbability !== null ? `\n☔ 降雨機率 ${weather.precipitationProbability}%` : "";
-  return `🌤️ ${city.cityLabel}${dayLabel}天氣\n${label},${weather.tempMin}°C ~ ${weather.tempMax}°C${rain}`;
+  const tips = buildWeatherTips(weather);
+  const tipLines = tips.length > 0 ? `\n\n${tips.join("\n")}` : "";
+  return `🌤️ ${city.cityLabel}${dayLabel}天氣\n${label},${weather.tempMin}°C ~ ${weather.tempMax}°C${rain}${tipLines}`;
 }
